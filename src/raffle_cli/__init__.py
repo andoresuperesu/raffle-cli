@@ -1,12 +1,24 @@
+import rich.align
+import rich.columns
+import rich.panel
+import rich.table
 import typer
 import csv
 import os
 import yaml
-from rich import print, prompt
+import random
+import time
+import rich
 from pathlib import Path
 from typing import Type, Optional
 from typing_extensions import Annotated
 from pydantic import BaseModel, ValidationError
+
+print=rich.print
+Table=rich.table.Table
+Console=rich.console.Console
+Panel=rich.panel.Panel
+Align=rich.align.Align
 
 CWD:Path=os.getcwd()
 DEF_CONFIG_FILE:Path=Path(os.path.join(CWD,"config.yaml"))
@@ -23,6 +35,7 @@ PAR_TYPES:dict={'name':str,'lastname':str}
 PRI_TYPES:dict={'item':str,'qty':int}
 WIN_TYPES:dict={'name':str,'lastname':str,'item':str}
 RECENTLY_CREATED=False
+CONSOLE=Console()
 
 app = typer.Typer()
 
@@ -34,11 +47,30 @@ class raffle_config(BaseModel):
 
 @app.callback(invoke_without_command=True)
 def main(config: Annotated[Optional[Path], typer.Option()] = None):
-    check_config(config)
-    file_checked, par_file, pri_file, win_file=check_files_in_config(config)
-    if file_checked:
-        participants=read_csv_data(par_file)
-        prizes=read_csv_data(pri_file)
+    cli_ui_title("WELLCOME TO RAFFLE-CLI")
+    config_check, config=check_config(config)
+    if config_check:
+        file_check, par_file, pri_file, win_file=check_files_in_config(config)
+    else:
+        print(f"Something went wrong reading the config file")
+    if file_check:
+        participants=read_csv_typed(par_file,PAR_TYPES)
+        prizes=read_csv_typed(pri_file, PRI_TYPES)
+        winners=read_csv_typed(win_file,WIN_TYPES)
+    else:
+        print(f"Something went wrong with reading the default files from the {config.name}")
+    
+    prizes=order_prizes(prizes,"high-low")
+    print_delayed(f"Game starting in...")
+    print_delayed("3 2 1 Go",1)
+    time.sleep(0.5)
+    CONSOLE.clear()
+    winners=distribute_prizes(prizes,participants,winners)
+    cli_ui_title(dictlist_to_table(winners),"raffle-cli Results","Congratulations to all winners!")
+
+    print("This is the end so far...")
+    print()
+    
 
     
 
@@ -46,11 +78,140 @@ def main(config: Annotated[Optional[Path], typer.Option()] = None):
 def setup()->None:
     print("You ran setup command.")
 
+# ----------------------------------------------------------------------
+#                           APP MAIN FUNCTIONS
+# ----------------------------------------------------------------------
+def order_prizes(prize_data:list[dict], order_type:str):
+    """
+    Orders a list of prize dictionaries based on order_type.
+
+    Parameters:
+    - prizes_data (list): List of dictionaries. Each dictionary should contain at least the key 'qty'.
+    - order_type (str): Ordering mode. Can be 'shuffle' for random ordering,
+                        'low-high' for ascending order by 'qty', or 'high-low' for descending order by 'qty'.
+
+    Returns:
+    - list: The ordered list of dictionaries.
+    
+    Raises:
+    - ValueError: If order_type is not one of the allowed options.
+    """
+    if order_type == "shuffle":
+        random.shuffle(prize_data)
+    elif order_type == "low-high":
+        prize_data.sort(key=lambda x: x["qty"])
+    elif order_type == "high-low":
+        prize_data.sort(key=lambda x: x["qty"], reverse=True)
+    else:
+        raise ValueError("Invalid order_type. Choose from 'shuffle', 'low-high', or 'high-low'.")
+    
+    return prize_data
+
+def distribute_prizes(prizes_data, participant_data,winner_data):
+    """
+    Distributes prizes among participants.
+    
+    For each prize (represented as a dict with keys 'item' and 'qty'),
+    while its qty > 0, a participant is selected at random from participant_data.
+    
+    - If the participant hasn't won before, they are added to winner_data with the prize.
+    - If the participant already has a prize, then they "swap": their winner entry is updated 
+      to the new prize's item, and the prize they previously held gets its qty increased by 1.
+      (A new participant will then be selected to eventually claim that returned prize unit.)
+    
+    The process repeats until every prize in prizes_data has qty equal to 0.
+    
+    Parameters:
+      prizes_data (list of dict): Each dict has structure {"item": str, "qty": int}.
+      participant_data (list of dict): Each dict has structure {"name": str, "lastname": str}.
+      
+    Returns:
+      list of dict: The final winners list with each dict in the form
+                    {"name": str, "lastname": str, "item": str}.
+    """
+    winner_data = []
+    
+    # Helper: locate a participant in winner_data by name and lastname.
+    def find_winner_index(name, lastname):
+        for i, winner in enumerate(winner_data):
+            if winner["name"] == name and winner["lastname"] == lastname:
+                return i
+        return None
+    
+    # Continue until all prize quantities are zero.
+    while any(prize["qty"] > 0 for prize in prizes_data):
+        # Process each prize unit.
+        for prize in prizes_data:
+            # Award as long as units remain for this prize.
+            while prize["qty"] > 0:
+                cli_ui_title("ONGOING RAFFLE")
+                cli_ui_status(dictlist_to_table(prizes_data),dictlist_to_table(winner_data,"No winner data yet"))
+                #print_table(prizes_data)
+                #print_table(winner_data,"No winner data yet")
+                
+                thingy=prize["item"]
+                print_delayed(f"Next item to win is... {thingy}")
+                participant = random.choice(participant_data)
+                print_delayed(f"\tThe winner of {thingy} is.... ")
+                input("\tPress enter when ready.")
+                pname=participant["name"]
+                plastname=participant["lastname"]
+                print(f"\t\t{pname} {plastname}")
+                
+                idx = find_winner_index(participant["name"], participant["lastname"])
+                
+                if idx is None:
+                    # Participant hasn't won yet. Award the prize.
+                    winner_data.append({"name": participant["name"],"lastname": participant["lastname"],"item": prize["item"]})
+                    prize["qty"] -= 1
+                else:
+                    print(f"\t{participant} won already!!")
+                    # Participant already has a prize.
+                    current_item = winner_data[idx]["item"]
+                    # If the new prize is the same as the current one, skip to avoid unnecessary swap.
+                    if current_item == prize["item"]:
+                        # Optionally, you could try selecting another participant.
+                        print_delayed("\t\tAlready got that, let's pick somebody else")
+                    else:
+                        new_item=prize["item"]
+                        swap_bool=typer.confirm(f"\t\tWant to swap '{current_item}' for '{new_item}'")
+                        
+                        if swap_bool:
+                            # Swap: update the participant's prize to the new prize.
+                            winner_data[idx]["item"] = prize["item"]
+                            # Return the previously won prize: increase its quantity by 1.
+                            prize["qty"] -= 1
+                            for p in prizes_data:
+                                if p["item"] == current_item:
+                                    p["qty"] += 1
+                                    print_delayed(f"\t\tItems switched!")
+                                    break
+                        else:
+                            print("Back to the game!")
+                input("Press enter to continue...")
+
+
+                # Optional: if all prizes have been fully awarded, break out.
+                if not any(p["qty"] > 0 for p in prizes_data):
+                    break
+                    
+    return winner_data
+
+def cli_ui_title(panelInput="[purple]RAFFLE-CLI[/]",panelTitle:str="raffle-cli",panelSubtitle:str="Let's Raffle!"):
+    CONSOLE.clear()
+    print(Panel(Align.center(panelInput), title=panelTitle, subtitle=panelSubtitle,title_align="left",subtitle_align="right"))
+
+def cli_ui_status(prizesTable:rich.table.Table|str,winnerTable:rich.table.Table|str):
+    panelColumns=rich.columns.Columns([prizesTable,winnerTable])
+    print(Panel(panelColumns))
+
 
 # ----------------------------------------------------------------------
 #                           FILE VALIDATION
 # ----------------------------------------------------------------------
-def check_config(config_file:Path=None)->bool:
+
+# CONFIG FILE VALIDATION
+def check_config(config_file:Path=None)->tuple[bool, Path]:
     if config_file==None:
         print("No config file was passed, trying default.")
         config_file=DEF_CONFIG_FILE
@@ -71,14 +232,17 @@ def check_config(config_file:Path=None)->bool:
     checked_structure=check_config_structure(config_file,raffle_config)
     if checked_structure:
         print("    Nice, a correct config file, [bold green]well done![/]")
-        return True
+        return True, config_file
     else:
         print(f":task: Please fix [bold]{config_file.name}[/].")
-        reset_file=typer.confirm(f"Want to set the default content?",abort=True)
+        reset_file=typer.confirm(f"Want to set the default content?",abort=False)
         if reset_file:
             create_default_config(config_file,True)
-            return True
+            return True, config_file
+        else:
+            return False, None
 
+# CONFIG FILE CREATION
 def create_default_config(config_file:Path=DEF_CONFIG_FILE, reset:bool=False):
     # Create default config file
     if not reset:
@@ -91,6 +255,7 @@ def create_default_config(config_file:Path=DEF_CONFIG_FILE, reset:bool=False):
     if reset:
         print(":white_check_mark: Done, content reset.")
 
+# CONFIG YAML Model VALIDATION
 def check_config_structure(file_path: Path, model: Type[BaseModel]) -> bool:
     """
     Verifies that a YAML file is well-formed and that its content adheres to
@@ -117,13 +282,14 @@ def check_config_structure(file_path: Path, model: Type[BaseModel]) -> bool:
         print("    Unexpected error:", e)
         return False
 
+# WORK FILES VALIDATION
 def check_files_in_config(config_file:Path)->tuple[bool,Path,Path,Path]:
     try:
         with open(config_file, 'r') as file:
             yaml_data = yaml.safe_load(file)
     except Exception as e:
         print(f"    Error reading YAML file: {e}")
-        exit()
+        return False, None, None, None
     par_file=Path(yaml_data['participants_file'])
     pri_file=Path(yaml_data['prizes_file'])
     win_file=Path(yaml_data['winners_file'])
@@ -138,6 +304,7 @@ def check_files_in_config(config_file:Path)->tuple[bool,Path,Path,Path]:
         reset_work_file('WIN',win_file)
     return True, par_file,pri_file,win_file
 
+#POPULATE WORK FILE
 def reset_work_file(filetype:str,file:Path=DEF_PAR_FILE,check_failed:bool=False):
     filetypes=['PAR','PRI','WIN']
     if filetype not in filetypes:
@@ -149,6 +316,7 @@ def reset_work_file(filetype:str,file:Path=DEF_PAR_FILE,check_failed:bool=False)
     else:
         print("      Ok, fix it on your own, see you back later!")
 
+#CREATE ANY FILE
 def create_file_ifdoesntexist(file_to_create:Path,printoffset:int=4):
     global RECENTLY_CREATED
     if file_to_create.exists():
@@ -158,7 +326,7 @@ def create_file_ifdoesntexist(file_to_create:Path,printoffset:int=4):
         RECENTLY_CREATED=True
         print(f"{printoffset*' '}:white_check_mark: Created [bold]{file_to_create.name}[/]")
 
-
+#POPULATE CSV FILE
 def populate_csv(filename:Path, columns:list, rows:list[dict]=None):
     """
     Creates a CSV file with the specified columns as the header.
@@ -176,6 +344,7 @@ def populate_csv(filename:Path, columns:list, rows:list[dict]=None):
             for row in rows:
                 writer.writerow(row)
 
+#VERIFY CSV FILE
 def verify_csv(filename: Path, expected_types: dict) -> bool:
     """
     Verifies that a CSV file has the expected columns and that each row's data 
@@ -233,12 +402,85 @@ def verify_csv(filename: Path, expected_types: dict) -> bool:
         print(f"      An unexpected error occurred: {e}")
         return False
 
+# HELPER FUNCTIONS
+
+def print_delayed(text, delay=0.3):
+    """
+    Prints the given text one word at a time with a delay between words.
+    
+    Parameters:
+      text (str): The full text to print.
+      delay (float): Time in seconds to wait between printing each word.
+    """
+    words = text.split(" ")
+    for word in words:
+        print(word, end=' ')
+        time.sleep(delay)
+    print()  # Ensure newline at the end
 
 def read_csv_data(filepath:Path) -> list[dict]:
-    with open(f'{filepath}.csv', 'r') as file:
+    with open(filepath, 'r') as file:
         reader = csv.DictReader(file)
         data_list = [row for row in reader]
         return data_list
 
+def read_csv_typed(filepath, field_types):
+    """
+    Reads a CSV file into a list of dictionaries and casts each field to its corresponding data type.
+
+    Parameters:
+      filepath (str): Path to the CSV file.
+      field_types (dict): Dictionary where keys are CSV field names and values are the functions
+                          used to cast the field values (e.g., int, float, str).
+
+    Returns:
+      list: A list of dictionaries with properly typed values.
+
+    Raises:
+      KeyError: If a field specified in field_types is missing in the CSV.
+      ValueError: If a field value cannot be cast to the specified type.
+    """
+    result = []
+    with open(filepath, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            new_row = {}
+            for field, cast_func in field_types.items():
+                if field not in row:
+                    raise KeyError(f"Field '{field}' not found in the CSV file.")
+                try:
+                    new_row[field] = cast_func(row[field])
+                except Exception as e:
+                    raise ValueError(f"Error casting field '{field}' with value '{row[field]}': {e}")
+            result.append(new_row)
+    return result
+
+def dictlist_to_table(data:list[dict],no_data_str:str="No data to display"):
+    """
+    Prints a list of dictionaries as a Rich table.
+    
+    Assumes all dictionaries have the same structure.
+    
+    Parameters:
+        data (list of dict): The list of dictionaries to print.
+    """
+    if not data:
+        return no_data_str
+
+    # Create a table and use keys from the first dict as column headers
+    dictlistTable = Table(show_header=True, header_style="bold magenta")
+    for key in data[0].keys():
+        dictlistTable.add_column(str(key))
+
+    # Add rows to the table
+    for row in data:
+        # Ensure that each value is converted to a string
+        dictlistTable.add_row(*(str(row[key]) for key in data[0].keys()))
+
+    return dictlistTable
+
 def main_cli():
+    app()
+
+if __name__=='__main__':
     app()
