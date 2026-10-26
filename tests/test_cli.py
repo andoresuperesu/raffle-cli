@@ -96,7 +96,7 @@ def test_tui_draws_everything_and_persists():
         async with app_.run_test(size=(100, 30)) as pilot:
             for _ in range(3):
                 await pilot.press("enter")
-                await pilot.pause(0.5)
+                await pilot.pause(1.0)
             await pilot.pause(1.2)
             assert isinstance(app_.screen, FireworksScreen)
             await pilot.press("escape")
@@ -121,3 +121,55 @@ def test_tui_missing_extra_message_is_not_eaten_by_markup(tmp_path, monkeypatch)
     out = runner.invoke(app, ["-c", str(cfg), "--yes", "--tui"]).output
     assert "raffle-cli[tui]" in out and "--with textual" in out
 
+
+
+def test_tui_lever_click_draws_and_layout_is_responsive():
+    from raffle_cli.slot import SlotMachine
+    from raffle_cli.tui import RaffleApp
+
+    people = [Participant("Ada", "Lovelace"), Participant("Guido", "van Rossum")]
+    raffle = Raffle(people, [Prize("Mug", 2)], rng=random.Random(0))
+    saved = []
+
+    async def go():
+        app_ = RaffleApp(raffle, saved.append, seed=0, fast=True, show_fireworks=False)
+        async with app_.run_test(size=(140, 40)) as pilot:
+            main = app_.query_one("#main")
+            assert main.has_class("wide")
+            await pilot.click(SlotMachine)  # mouse pulls the lever
+            await pilot.pause(1.0)
+            assert len(saved) == 1
+            machine = app_.query_one(SlotMachine)
+            assert [r.landed for r in machine.reels] == [True, True]
+            assert [r.strip[r.pos] for r in machine.reels] == [saved[0].name, saved[0].lastname]
+            assert machine.lever == 0
+            await pilot.resize_terminal(90, 30)
+            await pilot.pause()
+            assert not main.has_class("wide")
+
+    asyncio.run(go())
+
+
+def test_tui_animation_leaves_the_seeded_draw_untouched():
+    from raffle_cli.tui import RaffleApp
+
+    people = [Participant(f"P{i}", "X") for i in range(6)]
+
+    def winners(use_tui):
+        raffle = Raffle(people, [Prize("Mug", 3)], rng=random.Random(99))
+        if not use_tui:
+            while not raffle.done:
+                raffle.draw()
+            return raffle.winners
+
+        async def go():
+            app_ = RaffleApp(raffle, lambda w: None, seed=99, fast=True, show_fireworks=False)
+            async with app_.run_test(size=(100, 30)) as pilot:
+                for _ in range(3):
+                    await pilot.press("enter")
+                    await pilot.pause(1.0)
+
+        asyncio.run(go())
+        return raffle.winners
+
+    assert winners(True) == winners(False)

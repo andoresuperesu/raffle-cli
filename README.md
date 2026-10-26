@@ -89,7 +89,15 @@ Invalid files produce a list of every problem with line numbers, never a traceba
 
 ## Fireworks and the Textual interface
 
-After the last prize, the classic interface offers a full-screen fireworks show cycling through the winners (Ctrl+C skips it). In `--tui` mode, you get prize/winner tables, a slot-machine style name spin and the same show; keys: **Enter/Space** draw, **f** fireworks, **q** quit.
+After the last prize, the classic interface offers a full-screen fireworks show cycling through the winners (Ctrl+C skips it).
+
+`--tui` opens a full-screen interface with prize and winner tables and an animated **slot machine**: pull the lever and the name and lastname reels spin, slow down and land on the winner one after the other. On wide terminals (120+ columns) the machine sits on the right; on narrower ones it moves to the top. Then the same fireworks play.
+
+| Input | Action |
+| --- | --- |
+| **Enter / Space**, or **click the slot machine** | Pull the lever (draw the next prize) |
+| **f** | Replay the fireworks |
+| **q** | Quit |
 
 ## Development
 

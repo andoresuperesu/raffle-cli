@@ -7,12 +7,13 @@ from typing import Callable
 from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Label, Static
 
 from .fireworks import Fireworks
 from .raffle import Raffle, Winner
+from .slot import SlotMachine
 
 
 class FireworksScreen(Screen):
@@ -39,10 +40,16 @@ class FireworksScreen(Screen):
         self.query_one("#sky", Static).update(self._show.render())
 
 
+WIDE_AT = 120  # columns; at least this wide the slot machine moves to the right
+
+
 class RaffleApp(App):
     TITLE = "raffle-cli"
     CSS = """
-    #stage { height: 9; content-align: center middle; text-align: center; border: round $accent; margin: 0 1; }
+    #main { height: 1fr; }
+    #machine-box { height: 8; width: 100%; align: center middle; }
+    #main.wide #machine-box { dock: right; width: 52; height: 100%; }
+    #stage { height: 6; content-align: center middle; text-align: center; border: round $accent; margin: 0 1; }
     #tables { height: 1fr; }
     #tables > Vertical { width: 1fr; padding: 0 1; }
     """
@@ -71,20 +78,33 @@ class RaffleApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static(id="stage")
-        with Horizontal(id="tables"):
-            with Vertical():
-                yield Label("[b]Prizes left[/]")
-                yield DataTable(id="prizes", show_cursor=False)
-            with Vertical():
-                yield Label("[b]Winners[/]")
-                yield DataTable(id="winners", show_cursor=False)
+        with Container(id="main"):
+            with Container(id="machine-box"):
+                yield SlotMachine(self.raffle.participants, fast=self.fast, id="machine")
+            yield Static(id="stage")
+            with Horizontal(id="tables"):
+                with Vertical():
+                    yield Label("[b]Prizes left[/]")
+                    yield DataTable(id="prizes", show_cursor=False)
+                with Vertical():
+                    yield Label("[b]Winners[/]")
+                    yield DataTable(id="winners", show_cursor=False)
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#prizes", DataTable).add_columns("item", "qty")
         self.query_one("#winners", DataTable).add_columns("name", "lastname", "item")
         self._refresh()
+        self._layout(self.size.width)
+
+    def on_resize(self, event) -> None:
+        self._layout(event.size.width)
+
+    def _layout(self, width: int) -> None:
+        self.query_one("#main").set_class(width >= WIDE_AT, "wide")
+
+    def on_slot_machine_pulled(self) -> None:
+        self.action_draw()
 
     # --- helpers --------------------------------------------------------
     def _stage(self, text: str) -> None:
@@ -103,7 +123,7 @@ class RaffleApp(App):
         if self.raffle.done:
             self._stage("[b green]All prizes awarded![/]\n\nPress [b]f[/] to replay the fireworks, [b]q[/] to quit.")
         else:
-            self._stage(f"Next prize:\n\n[b yellow]{escape(self.raffle.next_prize)}[/]\n\nPress [b]Enter[/] to draw")
+            self._stage(f"Next prize:\n\n[b yellow]{escape(self.raffle.next_prize)}[/]\n\nPress [b]Enter[/] or click the machine to pull the lever")
 
     # --- actions --------------------------------------------------------
     def action_draw(self) -> None:
@@ -111,23 +131,13 @@ class RaffleApp(App):
             return
         self._busy = True
         item = self.raffle.next_prize
-        winner = self.raffle.draw()  # decided now; the spin below is just for show
-        people = self.raffle.participants
-        steps = 4 if self.fast else 32
-        state = {"n": 0}
+        winner = self.raffle.draw()  # decided now; the reels just land on it
+        self._stage(f"Drawing [b yellow]{escape(item)}[/]\n\n[dim]Good luck![/]")
 
-        def spin() -> None:
-            state["n"] += 1
-            if state["n"] < steps:
-                who = self.raffle.rng.choice(people)
-                self._stage(f"Drawing [b yellow]{escape(item)}[/]\n\n[b dim]{escape(who.full_name)}[/]")
-                # slow down like a real roulette wheel: 50ms at first, ~350ms for the last spins
-                delay = 0.05 if self.fast else 0.05 + 0.3 * (state["n"] / steps) ** 3
-                self.set_timer(delay, spin)
-                return
+        def reveal() -> None:
             self.on_winner(winner)
             self._refresh()
-            hint = "That was the last prize!" if self.raffle.done else "Press Enter for the next prize"
+            hint = "That was the last prize!" if self.raffle.done else "Press Enter or click the machine for the next prize"
             self._stage(
                 f"[b yellow]{escape(item)}[/] goes to\n\n[b green]🎉 {escape(winner.full_name)} 🎉[/]\n\n[dim]{hint}[/]"
             )
@@ -135,7 +145,7 @@ class RaffleApp(App):
             if self.raffle.done and self.show_fireworks:
                 self.set_timer(0.5 if self.fast else 3.0, self.action_fireworks)
 
-        spin()
+        self.query_one(SlotMachine).pull(winner, reveal)
 
     def action_fireworks(self) -> None:
         if self.raffle.winners and not isinstance(self.screen, FireworksScreen):
