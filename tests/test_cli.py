@@ -105,3 +105,18 @@ def test_tui_draws_everything_and_persists():
 
     asyncio.run(go())
     assert raffle.done and saved == raffle.winners and len(saved) == 3
+
+
+def test_finished_raffle_explains_how_to_start_over(tmp_path):
+    cfg = setup_event(tmp_path)
+    args = ["-c", str(cfg), "--yes", "--fast", "--no-fireworks"]
+    runner.invoke(app, args)
+    assert "already been awarded" in runner.invoke(app, args).output
+
+
+def test_tui_missing_extra_message_is_not_eaten_by_markup(tmp_path, monkeypatch):
+    import sys
+    cfg = setup_event(tmp_path)
+    monkeypatch.setitem(sys.modules, "raffle_cli.tui", None)  # simulate textual not installed
+    out = runner.invoke(app, ["-c", str(cfg), "--yes", "--tui"]).output
+    assert "raffle-cli[tui]" in out and "--with textual" in out

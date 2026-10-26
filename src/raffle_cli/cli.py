@@ -62,6 +62,11 @@ def build_raffle(config_path: Path, seed: int, order: str, interactive: bool) ->
         raise fail(str(exc))
     if previous:
         console.print(f"[cyan]Resuming:[/] {len(previous)} prize(s) already awarded in {cfg.winners_file.name}.")
+        if raffle.done:
+            console.print(
+                "[yellow]Every prize has already been awarded.[/] For a fresh raffle, set "
+                f"`recreate_from_winners: false` in {config_path.name} or delete {cfg.winners_file.name}."
+            )
     else:
         reset_winners(cfg.winners_file)
     return raffle, cfg
@@ -100,7 +105,11 @@ def main(
         try:
             from .tui import RaffleApp
         except ImportError:
-            raise fail("The Textual interface needs an extra: pip install 'raffle-cli[tui]'")
+            raise fail(
+                "The Textual interface needs the [bold]tui[/] extra: "
+                + escape("pip install 'raffle-cli[tui]'")
+                + " (with uvx: add [bold]--with textual[/])"
+            )
         RaffleApp(raffle, save, seed=seed, fast=fast, show_fireworks=fireworks_flag).run()
         ui.show_results(console, raffle.winners, seed)
     else:
