@@ -5,6 +5,27 @@ from __future__ import annotations
 import math
 from html import escape
 
+from diagrams_es import ES, KEEP  # noqa: E402
+
+LANG = "en"
+MISSING: set[str] = set()
+
+
+def tr(s: str) -> str:
+    """Translate a label when building the Spanish edition (unknown strings pass through)."""
+    if LANG == "en" or not s:
+        return s
+    core = s.strip()
+    lead = s[: len(s) - len(s.lstrip())]
+    if core in ES:
+        return lead + ES[core]
+    if core in KEEP:
+        return s
+    if any(c.isalpha() for c in core):
+        MISSING.add(s)
+    return s
+
+
 DEFS = """<defs>
 <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
 <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
@@ -14,12 +35,13 @@ DEFS = """<defs>
 def svg(w: int, h: int, body: str, label: str = "") -> str:
     return (
         f'<figure class="diagram"><svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" role="img" '
-        f'aria-label="{escape(label)}" font-family="Inter, Helvetica, Arial, sans-serif">{DEFS}{body}</svg></figure>'
+        f'aria-label="{escape(tr(label))}" font-family="Inter, Helvetica, Arial, sans-serif">{DEFS}{body}</svg></figure>'
     )
 
 
 def box(x, y, w, h, title, sub="", kind="plain", mono=False) -> str:
     out = [f'<rect class="bx {kind}" x="{x}" y="{y}" width="{w}" height="{h}" rx="8"/>']
+    title, sub = tr(title), "\n".join(tr(x) for x in sub.split("\n")) if sub else ""
     lines = sub.split("\n") if sub else []
     ty = y + h / 2 - (len(lines) * 7) + (4 if not lines else 0)
     if lines:
@@ -40,12 +62,12 @@ def arrow(pts, dashed=False, blue=False, label=None, lx=None, ly=None, both=Fals
     if label:
         mx = lx if lx is not None else (pts[0][0] + pts[-1][0]) / 2
         my = ly if ly is not None else (pts[0][1] + pts[-1][1]) / 2 - 4
-        out += f'<text x="{mx}" y="{my}" text-anchor="middle" class="lb">{escape(label)}</text>'
+        out += f'<text x="{mx}" y="{my}" text-anchor="middle" class="lb">{escape(tr(label))}</text>'
     return out
 
 
 def text(x, y, s, cls="lb", anchor="middle") -> str:
-    return f'<text x="{x}" y="{y}" text-anchor="{anchor}" class="{cls}">{escape(s)}</text>'
+    return f'<text x="{x}" y="{y}" text-anchor="{anchor}" class="{cls}">{escape(tr(s))}</text>'
 
 
 # ---------------------------------------------------------------------------
@@ -307,9 +329,9 @@ def test_layers() -> str:
         w = 300 + i * 90
         x = 20 + (480 - w) / 2 + 80
         b.append(box(x, 12 + i * 66, w, 56, t, s, k))
-    b.append(arrow([(655, 220), (655, 30)], blue=True))
-    b.append(text(667, 125, "slower,", "lb", "start"))
-    b.append(text(667, 139, "more", "lb", "start"))
-    b.append(text(667, 153, "fragile", "lb", "start"))
+    b.append(arrow([(645, 220), (645, 30)], blue=True))
+    b.append(text(657, 125, "slower,", "lb", "start"))
+    b.append(text(657, 139, "more", "lb", "start"))
+    b.append(text(657, 153, "fragile", "lb", "start"))
     b.append(text(60, 282, "bottom: fast and many", "lb", "start"))
     return svg(720, 295, "".join(b), "Test layers")

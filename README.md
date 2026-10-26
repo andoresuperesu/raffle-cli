@@ -5,6 +5,7 @@ A transparent terminal raffle for meetup giveaways (no money involved, just a fa
 Built with [Typer](https://typer.tiangolo.com) and [Rich](https://github.com/Textualize/rich) (thank you @tiangolo and @willmcgugan), with an optional full-screen interface in [Textual](https://textual.textualize.io).
 
 > 📘 **New to Python?** Read the beginner's guide, [`docs/how-raffle-cli-was-built.pdf`](docs/how-raffle-cli-was-built.pdf) (34 pages, with diagrams): how every part works, why each technical decision was made, and exercises to change the code yourself.
+> 🇪🇸 **En español:** [`docs/como-se-construyo-raffle-cli.pdf`](docs/como-se-construyo-raffle-cli.pdf) (35 páginas).
 >
 > 🤖 **Provenance:** the first prototype was written by the repo owner; version 0.2.0 (restructure, fixes, persistence, fireworks, Textual slot machine, tests, docs) was written together with [Claude](https://claude.com/claude-code). The commit trailers say so.
 
@@ -138,7 +139,7 @@ src/raffle_cli/
   slot.py       the slot machine widget
 tests/          43 tests: engine, files/config, CLI, Textual app
 examples/       a ready-to-run config and CSVs
-docs/           the beginner's guide (PDF) and its source (docs/guide-src/)
+docs/           the beginner's guide (PDF, English + Spanish) and its source (docs/guide-src/)
 ```
 
 ## Development
