@@ -1,0 +1,4 @@
+participants_file: participants.csv
+prizes_file: prizes.csv
+winners_file: winners.csv
+recreate_from_winners: true

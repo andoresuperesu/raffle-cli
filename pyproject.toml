@@ -1,25 +1,44 @@
 [project]
 name = "raffle-cli"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "A transparent terminal raffle for meetup giveaways, with a fireworks finale."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "Andoresu Peresu", email = "code@aperezc.xyz" }
 ]
 maintainers = [
   { name = "Andoresu Peresu", email = "code@aperezc.xyz" }
 ]
+keywords = ["raffle", "giveaway", "cli", "meetup", "textual", "rich"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
 requires-python = ">=3.10"
 dependencies = [
-    "keyboard>=0.13.5",
     "pydantic>=2.10.6",
     "pyyaml>=6.0.2",
+    "rich>=13.9",
     "typer>=0.15.2",
 ]
 
+[project.optional-dependencies]
+tui = ["textual>=0.86"]
+
+[project.urls]
+Repository = "https://github.com/andoresuperesu/raffle-cli"
+
 [project.scripts]
 raffle-cli = "raffle_cli:main_cli"
+
+[dependency-groups]
+dev = ["pytest>=8", "textual>=0.86"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling"]

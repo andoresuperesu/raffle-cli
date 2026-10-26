@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# CLI files
-*.csv
-*.yaml
+# Raffle data created in the repo root by `raffle-cli setup` (examples/ is tracked)
+/config.yaml
+/participants.csv
+/prizes.csv
+/winners.csv
+/winners.csv.bak

@@ -1,0 +1,140 @@
+"""Full-screen Textual interface (`raffle-cli --tui`). Needs the `tui` extra."""
+
+from __future__ import annotations
+
+from typing import Callable
+
+from rich.markup import escape
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.screen import Screen
+from textual.widgets import DataTable, Footer, Header, Label, Static
+
+from .fireworks import Fireworks
+from .raffle import Raffle, Winner
+
+
+class FireworksScreen(Screen):
+    BINDINGS = [("escape,enter,space,q", "app.pop_screen", "Close")]
+
+    def __init__(self, winners: list[Winner]) -> None:
+        super().__init__()
+        self._captions = [f"{w.full_name}  ·  {w.item}" for w in winners]
+        self._show: Fireworks | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="sky")
+
+    def on_mount(self) -> None:
+        self._show = Fireworks(self.size.width, self.size.height, title="CONGRATULATIONS", captions=self._captions)
+        for _ in range(8):
+            self._show._launch()
+        self.set_interval(1 / 20, self._tick)
+
+    def _tick(self) -> None:
+        assert self._show is not None
+        self._show.resize(self.size.width, self.size.height)
+        self._show.step()
+        self.query_one("#sky", Static).update(self._show.render())
+
+
+class RaffleApp(App):
+    TITLE = "raffle-cli"
+    CSS = """
+    #tables { height: 1fr; }
+    #tables > Vertical { width: 1fr; padding: 0 1; }
+    #stage { height: 9; content-align: center middle; text-align: center; border: round $accent; margin: 0 1; }
+    """
+    BINDINGS = [
+        Binding("enter,space", "draw", "Draw next", priority=True),  # tables would otherwise swallow the key
+        ("f", "fireworks", "Fireworks"),
+        ("q", "quit", "Quit"),
+    ]
+
+    def __init__(
+        self,
+        raffle: Raffle,
+        on_winner: Callable[[Winner], None],
+        *,
+        seed: int | None = None,
+        fast: bool = False,
+        show_fireworks: bool = True,
+    ) -> None:
+        super().__init__()
+        self.raffle = raffle
+        self.on_winner = on_winner
+        self.fast = fast
+        self.show_fireworks = show_fireworks
+        self.sub_title = f"seed {seed}" if seed is not None else ""
+        self._busy = False
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Horizontal(id="tables"):
+            with Vertical():
+                yield Label("[b]Prizes left[/]")
+                yield DataTable(id="prizes", show_cursor=False)
+            with Vertical():
+                yield Label("[b]Winners[/]")
+                yield DataTable(id="winners", show_cursor=False)
+        yield Static(id="stage")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#prizes", DataTable).add_columns("item", "qty")
+        self.query_one("#winners", DataTable).add_columns("name", "lastname", "item")
+        self._refresh()
+
+    # --- helpers --------------------------------------------------------
+    def _stage(self, text: str) -> None:
+        self.query_one("#stage", Static).update(text)
+
+    def _refresh(self) -> None:
+        prizes = self.query_one("#prizes", DataTable)
+        prizes.clear()
+        for p in self.raffle.remaining:
+            prizes.add_row(p.item, str(p.qty))
+        winners = self.query_one("#winners", DataTable)
+        winners.clear()
+        for w in self.raffle.winners:
+            winners.add_row(w.name, w.lastname, w.item)
+        winners.scroll_end(animate=False)
+        if self.raffle.done:
+            self._stage("[b green]All prizes awarded![/]\n\nPress [b]f[/] to replay the fireworks, [b]q[/] to quit.")
+        else:
+            self._stage(f"Next prize:\n\n[b yellow]{escape(self.raffle.next_prize)}[/]\n\nPress [b]Enter[/] to draw")
+
+    # --- actions --------------------------------------------------------
+    def action_draw(self) -> None:
+        if self._busy or self.raffle.done:
+            return
+        self._busy = True
+        item = self.raffle.next_prize
+        winner = self.raffle.draw()  # decided now; the spin below is just for show
+        names = [p.full_name for p in self.raffle.participants]
+        steps = 3 if self.fast else 30
+        state = {"n": 0}
+
+        def spin() -> None:
+            state["n"] += 1
+            if state["n"] < steps:
+                name = self.raffle.rng.choice(names)
+                self._stage(f"Drawing [b yellow]{escape(item)}[/]\n\n[dim]{escape(name)}[/]")
+                return
+            timer.stop()
+            self.on_winner(winner)
+            self._refresh()
+            self._stage(
+                f"[b yellow]{escape(item)}[/] goes to\n\n[b green]🎉 {escape(winner.full_name)} 🎉[/]"
+                + ("" if not self.raffle.done else "\n\n[dim]That was the last prize![/]")
+            )
+            self._busy = False
+            if self.raffle.done and self.show_fireworks:
+                self.set_timer(0.5 if self.fast else 2.0, self.action_fireworks)
+
+        timer = self.set_interval(0.07, spin)
+
+    def action_fireworks(self) -> None:
+        if self.raffle.winners and not isinstance(self.screen, FireworksScreen):
+            self.push_screen(FireworksScreen(self.raffle.winners))
