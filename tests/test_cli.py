@@ -119,16 +119,5 @@ def test_tui_missing_extra_message_is_not_eaten_by_markup(tmp_path, monkeypatch)
     cfg = setup_event(tmp_path)
     monkeypatch.setitem(sys.modules, "raffle_cli.tui", None)  # simulate textual not installed
     out = runner.invoke(app, ["-c", str(cfg), "--yes", "--tui"]).output
-    assert "raffle-cli[tui]" in out and "--with textual --with pyfiglet" in out
+    assert "raffle-cli[tui]" in out and "--with textual" in out
 
-
-def test_big_name_fits_or_falls_back():
-    from raffle_cli.bigtext import big_name
-
-    art = big_name("Ada", "Lovelace", 120, 20)
-    assert art and max(map(len, art)) <= 120 and len(art) <= 20
-    two_lines = big_name("Maximiliano", "Fernandez de Cordoba", 60, 30)
-    assert two_lines and max(map(len, two_lines)) <= 60
-    assert big_name("Ada", "Lovelace", 5, 3) is None  # nowhere near enough room
-    assert big_name("José", "Pérez", 120, 20)  # accents are folded, not dropped
-    assert big_name("李", "雷", 120, 20) is None  # can't be drawn: caller shows plain text

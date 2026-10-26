@@ -108,7 +108,7 @@ def main(
             raise fail(
                 "The Textual interface needs the [bold]tui[/] extra: "
                 + escape("pip install 'raffle-cli[tui]'")
-                + " (with uvx: add [bold]--with textual --with pyfiglet[/])"
+                + " (with uvx: add [bold]--with textual[/])"
             )
         RaffleApp(raffle, save, seed=seed, fast=fast, show_fireworks=fireworks_flag).run()
         ui.show_results(console, raffle.winners, seed)
