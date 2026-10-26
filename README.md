@@ -12,7 +12,7 @@ uv tool install "raffle-cli[tui] @ git+https://github.com/andoresuperesu/raffle-
 # or try it without installing:
 uvx --from git+https://github.com/andoresuperesu/raffle-cli raffle-cli --help
 # ...and with the Textual interface:
-uvx --from git+https://github.com/andoresuperesu/raffle-cli --with textual raffle-cli --tui
+uvx --from git+https://github.com/andoresuperesu/raffle-cli --with textual --with pyfiglet raffle-cli --tui
 ```
 
 Requires Python 3.10+.

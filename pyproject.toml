@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-tui = ["textual>=0.86"]
+tui = ["textual>=0.86", "pyfiglet>=1.0"]
 
 [project.urls]
 Repository = "https://github.com/andoresuperesu/raffle-cli"
@@ -35,7 +35,7 @@ Repository = "https://github.com/andoresuperesu/raffle-cli"
 raffle-cli = "raffle_cli:main_cli"
 
 [dependency-groups]
-dev = ["pytest>=8", "textual>=0.86"]
+dev = ["pytest>=8", "textual>=0.86", "pyfiglet>=1.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
