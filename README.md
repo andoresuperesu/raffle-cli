@@ -4,6 +4,10 @@ A transparent terminal raffle for meetup giveaways (no money involved, just a fa
 
 Built with [Typer](https://typer.tiangolo.com) and [Rich](https://github.com/Textualize/rich) (thank you @tiangolo and @willmcgugan), with an optional full-screen interface in [Textual](https://textual.textualize.io).
 
+> 📘 **New to Python?** Read the beginner's guide, [`docs/how-raffle-cli-was-built.pdf`](docs/how-raffle-cli-was-built.pdf) (34 pages, with diagrams): how every part works, why each technical decision was made, and exercises to change the code yourself.
+>
+> 🤖 **Provenance:** the first prototype was written by the repo owner; version 0.2.0 (restructure, fixes, persistence, fireworks, Textual slot machine, tests, docs) was written together with [Claude](https://claude.com/claude-code). The commit trailers say so.
+
 ## Install
 
 ```bash
@@ -15,7 +19,7 @@ uvx --from git+https://github.com/andoresuperesu/raffle-cli raffle-cli --help
 uvx --from git+https://github.com/andoresuperesu/raffle-cli --with textual raffle-cli --tui
 ```
 
-Requires Python 3.10+.
+Requires Python 3.10+. On Windows use [Windows Terminal](https://aka.ms/terminal); in PowerShell set variables with `$R = "..."` instead of `R="..."`. The project was developed and tested on Linux, so the full-screen interface is not verified on Windows yet.
 
 ## Quick start
 
@@ -99,18 +103,55 @@ After the last prize, the classic interface offers a full-screen fireworks show 
 | **f** | Replay the fireworks |
 | **q** | Quit |
 
+## Technical decisions
+
+The short version. The PDF guide explains each one in depth, with diagrams and the alternatives that were rejected.
+
+| Decision | Why |
+| --- | --- |
+| The draw logic (`raffle.py`) is pure: no printing, no files | Both interfaces share it and it can be tested without a screen. |
+| Small frozen dataclasses instead of dicts | Typos are caught early; values can't be modified by accident. |
+| Draw by smallest `(wins, already_holds_item)` instead of "pick anyone, then swap" | Fair, easy to explain, can never loop forever when prizes outnumber people. |
+| People are identified by position, not by name | Two people with the same name are two chances. |
+| A seed is always shown; `random.Random(seed)` instead of `SystemRandom` | Anyone can reproduce and audit a draw (a receipt, not a secret). |
+| The animation has its own random generator | Cosmetics can never change who wins, so `--seed` gives identical winners in both interfaces. |
+| A winner is decided first, saved when revealed | The file never spoils the reveal; a crash loses nothing already announced. |
+| Validation lists every problem with line numbers; files are never auto-repaired | Fix a spreadsheet in one go; real data is never overwritten. |
+| Previous results are copied to `winners.csv.bak` when starting fresh | No silent data loss in front of an audience. |
+| Textual is an optional extra, imported lazily | Light default install; the TUI is opt-in. |
+| One fireworks simulation, rendered by Rich or Textual | No duplicated logic, no curses (works on Windows). |
+| The slot machine is one custom widget animated with timers, not `sleep` loops | Frames stay consistent and the UI stays responsive to keys and mouse. |
+| Plain-text names, no ASCII-art font | Long names, accents and non-Latin letters break big letters. |
+| Tests drive the real apps headlessly (`CliRunner`, Textual's `Pilot`) | Keys, clicks and resizing are tested, not just functions. |
+
+## Project layout
+
+```
+src/raffle_cli/
+  raffle.py     the brain: who wins what (pure logic)
+  files.py      read, validate and write the CSV files
+  config.py     config.yaml loading and `setup`
+  cli.py        Typer commands and options (the front door)
+  ui.py         classic Rich interface
+  fireworks.py  particle simulation + renderer
+  tui.py        Textual app (optional extra)
+  slot.py       the slot machine widget
+tests/          43 tests: engine, files/config, CLI, Textual app
+examples/       a ready-to-run config and CSVs
+docs/           the beginner's guide (PDF)
+```
+
 ## Development
 
 ```bash
 uv sync
 uv run pytest
+uv run raffle-cli --config examples/config.yaml --tui
 ```
-
-The code lives in `src/raffle_cli/`: `raffle.py` (pure draw logic), `files.py` / `config.py` (validation and setup), `ui.py` (classic interface), `tui.py` (Textual), `fireworks.py` (particle show), `cli.py` (Typer commands).
 
 ## Contribute
 
-PRs are welcome, thank you!
+PRs are welcome, thank you! The exercises at the end of the guide are good first contributions.
 
 ## License
 
