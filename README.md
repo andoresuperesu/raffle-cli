@@ -138,7 +138,7 @@ src/raffle_cli/
   slot.py       the slot machine widget
 tests/          43 tests: engine, files/config, CLI, Textual app
 examples/       a ready-to-run config and CSVs
-docs/           the beginner's guide (PDF)
+docs/           the beginner's guide (PDF) and its source (docs/guide-src/)
 ```
 
 ## Development
